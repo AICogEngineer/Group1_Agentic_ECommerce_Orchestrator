@@ -16,7 +16,7 @@ SNOWFLAKE_SCHEMA=#
 # Pinecone (used in policy retrieval)
 PINECONE_API_KEY=#
 PINECONE_ENVIRONMENT=#
-PINECONE_INDEX_NAME=policy-index
+PINECONE_INDEX_NAME=policy_index
 
 # Policy / Risk Thresholds
 MAX_REFUNDS_PER_MONTH=3               # Maximum number of refund requests per 30 day "month"

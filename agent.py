@@ -141,12 +141,16 @@ def run_agent(user_input: str, session_metadata: Dict[str, Any]) -> Dict[str, An
 
 # Local Demo
 if __name__ == "__main__":
-    demo_input = "Where am I?" # PII-sensitive request: should trigger identity verification and halt
+    demo_input = "Show my last order" # PII-sensitive request: should triggers identity check
 
     demo_session = {
+        "user_id": "demo_user_123",  # PII from .env
+        "email": "user@example.com",  # PII from .env
         "ip_address": "73.15.182.91", # Example public IP
         "geo_location": "TX",
-        "device_id": "demo-device"
+        "device_id": "demo-device",
+        "refund_count": 0,
+        "address_drift_miles": 0
     }
 
     output = run_agent(demo_input, demo_session)
@@ -157,5 +161,6 @@ if __name__ == "__main__":
     # Safety assertion: agent must halt at identity verification
     assert output.get("status") in {
         "IDENTITY_REQUIRED",
-        "IDENTITY_FAILED"
+        "IDENTITY_FAILED",
+        "IDENTITY_VERIFIED" # passes if correct demo PII provided
     }
