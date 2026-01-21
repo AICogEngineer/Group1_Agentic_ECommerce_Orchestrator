@@ -1,0 +1,23 @@
+# What the .env should have
+    # .env files must not have spaces around = 
+
+# Identity Verification (Demo Only)
+TRUSTED_USER_ID=demo_user_123
+TRUSTED_USER_EMAIL=user@example.com
+
+# Snowflake (used in retrieve_data node)
+SNOWFLAKE_ACCOUNT=#
+SNOWFLAKE_USER=#
+SNOWFLAKE_PASSWORD=#
+SNOWFLAKE_WAREHOUSE=#
+SNOWFLAKE_DATABASE=#
+SNOWFLAKE_SCHEMA=#
+
+# Pinecone (used in policy retrieval)
+PINECONE_API_KEY=#
+PINECONE_ENVIRONMENT=#
+PINECONE_INDEX_NAME=policy-index
+
+# Policy / Risk Thresholds
+MAX_REFUNDS_PER_MONTH=3               # Maximum number of refund requests per 30 day "month"
+ADDRESS_DRIFT_THRESHOLD_MILES=300     # Maximum allowed distance (in miles) between the shipping address on record and the user's current session location.
