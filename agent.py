@@ -50,7 +50,7 @@ def build_agent_graph() -> StateGraph:
     # Nodes
     graph.add_node("verify_identity", verify_identity_node)
     graph.add_node("retrieve_data", retrieve_data_node)
-    graph.add_node("red_flag_check", red_flag_check_node)
+    graph.add_node("red_flag_check", red_flag_checker_node)
     graph.add_node("risk_scoring", risk_scoring_node)
     graph.add_node("human_review", human_review_node)
     graph.add_node("draft_response", draft_response_node)

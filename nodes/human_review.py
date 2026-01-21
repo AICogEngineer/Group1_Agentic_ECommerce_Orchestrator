@@ -13,7 +13,6 @@ This node represents mandatory human oversight.
 
 from agent.state import AgentState
 
-
 def human_review_node(state: AgentState) -> AgentState:
     """
     Simulates a human approval step.
