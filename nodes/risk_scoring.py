@@ -4,52 +4,75 @@ risk_scoring.py
 Behavioral risk scoring node.
 
 Purpose:
-- Aggregate detected red flags into a single trust / risk signal
-- Decide whether the agent may proceed autonomously
-- Escalate borderline or low-trust cases to Human-in-the-Loop (HITL)
-
-Design rules:
-- No external calls
-- No side effects
-- Only reads and updates AgentState
+- Compute a composite trust score for the user based on historical and current signals
+- Flag users for human review if the trust score is below a threshold
+- Update AgentState fields for routing to human review or automated actions
 """
 
-from agent.state import AgentState
+from agent.state import AgentState, AgentStatus, RiskFlag
+
+# Default threshold below which human review is required
+TRUST_SCORE_THRESHOLD = 0.5
 
 def risk_scoring_node(state: AgentState) -> AgentState:
     """
-    Calculates a simple trust score based on accumulated red flags.
+    Computes trust score and determines whether a human review is required.
 
-    In production, this could be:
-    - A weighted rules engine
-    - A statistical model
-    - A learned risk classifier
-
-    For this demo:
-    - 0 flags  -> High trust
-    - 1 flag   -> Medium trust (low priority human review)
-    - 2+ flags -> Low trust (top priority human review)
+    Updates the AgentState:
+    - state.fraud.trust_score
+    - state.requires_human_review
+    - state.status
     """
 
-    red_flag_count = len(state.red_flags)
+    # Extract current fraud signals
+    refund_count = state.fraud.refund_count if state.fraud else 0
+    address_drift = state.fraud.address_drift_miles if state.fraud else 0.0
 
-    # High trust: safe to continue autonomously
-    if red_flag_count == 0:
-        state.trust_score = "HIGH"
-        state.status = "RISK_ACCEPTABLE"
-        state.requires_human_review = False
-        return state
+    # Compute a simple trust score
+    # Higher refund count and higher address drift reduce trust
+    # Score normalized between 0 and 1
+    trust_score = 1.0 # Start fully trusted
 
-    # Medium trust: human review recommended
-    if red_flag_count == 1:
-        state.trust_score = "MEDIUM"
-        state.status = "RISK_REVIEW_RECOMMENDED"
+    # Penalize excessive refunds
+    if refund_count > 0:
+        trust_score -= min(0.3, 0.05 * refund_count) # Each refund reduces score up to 0.3 max
+
+    # Penalize significant address drift
+    if address_drift > 0:
+        trust_score -= min(0.3, address_drift / 1000.0) # Each 1000 miles reduces score up to 0.3 max
+
+    # Clamp trust_score between 0 and 1
+    trust_score = max(0.0, min(1.0, trust_score))
+
+    # Update fraud object
+    if state.fraud:
+        state.fraud.trust_score = trust_score
+    else:
+        from agent.state import FraudSignals
+        state.fraud = FraudSignals(
+            refund_count = refund_count,
+            address_drift_miles = address_drift,
+            red_flags = [],
+            requires_human_review = False,
+            summary="Auto-generated fraud summary for trust scoring"
+        )
+        state.fraud.trust_score = trust_score
+
+    # Determine if human review is required
+    if trust_score < TRUST_SCORE_THRESHOLD or (state.fraud.red_flags if state.fraud else []):
         state.requires_human_review = True
-        return state
+        state.status = AgentStatus.HUMAN_REVIEW_REQUIRED
+    else:
+        state.requires_human_review = False
+        state.status = AgentStatus.RISK_SCORED
 
-    # Low trust: human review mandatory
-    state.trust_score = "LOW"
-    state.status = "RISK_TOO_HIGH"
-    state.requires_human_review = True
+    # Optionally log reason for audit
+    reason_summary = (
+        f"Refunds: {refund_count}, "
+        f"Address drift: {address_drift} miles, "
+        f"Trust score: {trust_score:.2f}"
+    )
+    if state.fraud:
+        state.fraud.summary = reason_summary
 
     return state

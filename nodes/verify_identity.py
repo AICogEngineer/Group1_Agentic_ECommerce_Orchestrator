@@ -4,72 +4,62 @@ verify_identity.py
 Identity verification (HITL security gate) node.
 
 Purpose:
-- Prevent access to PII or financial actions without verification
-- Enforce a mandatory identity challenge for sensitive requests
-- Halt the agent safely until verification is completed
-
-Design rules:
-- No external calls
-- No database access
-- Uses .env for demo identity matching
-- Updates state only (no side effects)
+- Ensure that user identity is validated before sensitive operations
+- Gate the workflow for high-risk or PII-sensitive requests
+- Update agent state with verification results
 """
 
 import os
-from agent.state import AgentState
+from agent.state import AgentState, AgentStatus, Intent
+
+# Define keywords mapping to intents
+INTENT_KEYWORDS = {
+    "refund": Intent.REFUND,
+    "return": Intent.RETURN,
+    "shipping": Intent.SHIPPING_ISSUE,
+    "billing": Intent.BILLING_DISPUTE,
+    "account takeover": Intent.ACCOUNT_TAKEOVER
+}
 
 def verify_identity_node(state: AgentState) -> AgentState:
     """
-    Verifies the user's identity before allowing access to sensitive data.
-
-    In production, this could involve:
-    - OTP verification
-    - OAuth / SSO
-    - Knowledge-based authentication
-
-    In this demo:
-    - Identity is validated against trusted values in .env
+    Verifies if the user's identity is trusted/verified before allowing access to sensitive data.
+        - Identity is validated against trusted values in .env
+        - .env is the single source of truth
+    Determines intent based on keywords in user input.
+    Relies exclusively on .env for trusted credentials.
+    
+    In production, this would check PII, auth tokens, or external identity providers.    
     """
 
-    # Determine whether this request is sensitive
-    sensitive_keywords = ["refund", "order", "account", "address", "show my last order"] # For the demo triggers identity check, so I included "show my last order" in keywords
+    # Load trusted credentials from environment
+    trusted_user_id = os.environ["TRUSTED_USER_ID"]
+    trusted_user_email = os.environ["TRUSTED_USER_EMAIL"]
 
-    is_sensitive = any(
-        keyword in state.user_input.lower()
-        for keyword in sensitive_keywords
-    )
+    # Extract session metadata
+    session_user_id = state.session_metadata.get("user_id")
+    session_email = state.session_metadata.get("email")
 
-    # Non-sensitive requests may proceed without identity checks
-    if not is_sensitive:
+    # Identity verification
+    if session_user_id == trusted_user_id and session_email == trusted_user_email:
         state.is_verified = True
-        state.status = "NON_SENSITIVE_REQUEST"
-        return state
-
-    # Load trusted identity from .env
-    trusted_user_id = os.getenv("TRUSTED_USER_ID")
-    trusted_user_email = os.getenv("TRUSTED_USER_EMAIL")
-
-    # Identity information provided by the session
-    provided_user_id = state.session_metadata.get("user_id")
-    provided_email = state.session_metadata.get("email")
-
-    # No identity provided -> pause for HITL challenge
-    if not provided_user_id or not provided_email:
+        state.status = AgentStatus.IDENTITY_VERIFIED
+    else:
         state.is_verified = False
-        state.status = "IDENTITY_REQUIRED"
-        return state
+        state.status = AgentStatus.IDENTITY_REQUIRED
 
-    # Identity validation check
-    if (
-        provided_user_id == trusted_user_id
-        and provided_email == trusted_user_email
-    ):
-        state.is_verified = True
-        state.status = "IDENTITY_VERIFIED"
-        return state
+    # Set intent based on user input keywords
+    user_input_lower = state.user_input.lower()
+    detected_intent = Intent.OTHER # Default
+    for keyword, intent_enum in INTENT_KEYWORDS.items():
+        if keyword in user_input_lower:
+            detected_intent = intent_enum
+            break
 
-    # Identity failed -> hard stop
-    state.is_verified = False
-    state.status = "IDENTITY_FAILED"
+    state.intent = detected_intent
+
+    # Marks PII if user_id/email present
+    if "@" in state.user_input or any(c.isdigit() for c in state.user_input):
+        state.contains_pii = True
 
     return state

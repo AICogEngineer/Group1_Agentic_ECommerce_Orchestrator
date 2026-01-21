@@ -16,11 +16,12 @@ from dotenv import load_dotenv
 from typing import Dict, Any
 from langgraph.graph import StateGraph, START, END
 
-# This needs another agent.py, you do not need to pip install agent
+# Agent state and routing logic
 from agent.state import AgentState # AgentState (Pydantic / TypedDict)
 from agent.router import route_next_step # Routing decisions
 
-# Internal project modules (no pip-install for the following)
+# Node implementations
+    # Internal project modules (no pip-install for the following)
 from nodes.verify_identity import verify_identity_node # HITL security gate
 from nodes.retrieve_data import retrieve_data_node # Snowflake + Pinecone reasoning
 from nodes.red_flag_checker import red_flag_checker_node # Fraud detection logic
@@ -38,11 +39,11 @@ def build_agent_graph() -> StateGraph:
     """
     Builds the agentic workflow as a stateful, auditable graph.
 
-    The graph enforces:
+    Workflow enforces:
     - Mandatory identity verification (HITL)
     - Multi-source reasoning (Snowflake + Pinecone)
     - Fraud / red-flag detection
-    - Human approval for high-risk actions
+    - Human review for high-risk actions
     """
 
     graph = StateGraph(AgentState)
@@ -58,7 +59,7 @@ def build_agent_graph() -> StateGraph:
     # Entry Point
     graph.add_edge(START, "verify_identity") # Every sensitive request must pass identity verification first
 
-    # Routing
+    # Conditional routing based on node outputs
     graph.add_conditional_edges(
         "verify_identity",
         route_next_step,
@@ -114,6 +115,7 @@ def run_agent(user_input: str, session_metadata: Dict[str, Any]) -> Dict[str, An
         Final agent state (safe to log / inspect)
     """
 
+    # Initialize the agent state
     initial_state = AgentState(
         user_input = user_input,
         session_metadata = session_metadata,
@@ -124,16 +126,18 @@ def run_agent(user_input: str, session_metadata: Dict[str, Any]) -> Dict[str, An
         status = None,
 
         # Fraud / risk
-        refund_count = 0,
-        address_drift_miles = 0,
+        refund_count = session_metadata.get("refund_count", 0),
+        address_drift_miles = session_metadata.get("address_drift_miles", 0.0),
         red_flags = [],
 
         # HITL
         human_decision = None
     )
 
-
+    # Build and compile the workflow graph
     graph = build_agent_graph().compile()
+
+    # Execute the workflow
     final_state = graph.invoke(initial_state)
 
     return final_state.dict()
@@ -141,7 +145,7 @@ def run_agent(user_input: str, session_metadata: Dict[str, Any]) -> Dict[str, An
 
 # Local Demo
 if __name__ == "__main__":
-    demo_input = "Show my last order" # PII-sensitive request: should triggers identity check
+    demo_input = "Show my last order" # Example user request, should triggers identity check
 
     demo_session = {
         "user_id": "demo_user_123",  # PII from .env
@@ -158,7 +162,7 @@ if __name__ == "__main__":
     print("Final agent state:")
     print(output)
 
-    # Safety assertion: agent must halt at identity verification
+    # Safety assertion: agent must halt at identity verification if PII missing
     assert output.get("status") in {
         "IDENTITY_REQUIRED",
         "IDENTITY_FAILED",
