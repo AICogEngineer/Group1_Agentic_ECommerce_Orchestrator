@@ -107,7 +107,7 @@ def run_agent(user_input: str, session_metadata: Dict[str, Any]) -> Dict[str, An
     Executes the agent for a single user interaction.
 
     Args:
-        user_input: Raw user request (e.g., refund request)
+        user_input: Raw user request (ex: refund request)
         session_metadata: Session / login context used for fraud checks
 
     Returns:

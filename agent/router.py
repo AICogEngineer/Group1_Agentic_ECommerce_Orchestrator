@@ -16,15 +16,13 @@ Design principles:
 
 from agent.state import AgentState
 
-
 def route_next_step(state: AgentState) -> str:
     """
     Determines the next step in the LangGraph workflow.
 
-    This function is used by LangGraph's `add_conditional_edges`
-    and must return a string key that matches a defined edge.
+    This function is used by LangGraph's `add_conditional_edges` and must return a string key that matches a defined edge.
 
-    Routing priorities (highest → lowest):
+    Routing priorities (highest -> lowest):
     1. Identity enforcement (hard security gate)
     2. Human-in-the-loop escalation
     3. Normal autonomous continuation

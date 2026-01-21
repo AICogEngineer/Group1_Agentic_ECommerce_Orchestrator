@@ -17,8 +17,7 @@ from agent.state import AgentState
 
 def red_flag_checker_node(state: AgentState) -> AgentState:
     """
-    Checks for fraud and risk signals derived from policy rules
-    and historical user behavior.
+    Checks for fraud and risk signals derived from policy rules and historical user behavior.
 
     Red flags implemented:
     - Refund velocity (too many refunds in a short period)
