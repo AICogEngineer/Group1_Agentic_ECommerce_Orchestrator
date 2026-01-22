@@ -4,14 +4,18 @@ retrieve_data.py
 Node: retrieve_data
 
 Purpose:
-- Retrieve user order and account data from internal data sources using credentials from .env
+- Retrieve user order and account data from internal data sources (Snowflake + Pinecone)
 - Combine multi-source outputs into a structured format
 - Store results in AgentState.retrieved for downstream processing
+- Fully compatible with LangSmith tracing
 """
 
 import os
 from typing import Any
 from agent.state import AgentState, AgentStatus, RetrievalOutputs
+
+import pinecone
+from openai import OpenAI
 
 # Example database / API clients (replace with real implementations)
     # Credentials are read from environment variables
@@ -21,12 +25,15 @@ SNOWFLAKE_ACCOUNT = os.getenv("SNOWFLAKE_ACCOUNT")
 
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENV = os.getenv("PINECONE_ENV")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "orders-index")  # default index
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
 def fetch_order_from_snowflake(user_id: str, order_id: str) -> dict:
     """
-    Fetch order data for a user from Snowflake.
-    Replace this stub with a real Snowflake query using SNOWFLAKE_USER / PASSWORD / ACCOUNT.
+    Fetch order data for a user from Snowflake
+    Replace this stub with a real Snowflake query using credentials from .env
     """
     # Example mock response
     return {
@@ -52,23 +59,44 @@ def fetch_policy_context(order_data: dict) -> dict:
         "shipping_guarantee": "2-day shipping guaranteed"
     }
 
+# Pinecone retrieval helper
+def fetch_order_from_pinecone(query: str) -> dict:
+    """
+    Query Pinecone index for order-related data using embeddings.
+    Returns top result metadata.
+    """
+    # Initialize Pinecone if not already
+    if not pinecone.is_initialized():
+        pinecone.init(api_key = PINECONE_API_KEY, environment = PINECONE_ENV)
+
+    # Connect to index
+    index = pinecone.Index(PINECONE_INDEX_NAME)
+
+    # Create embedding for query
+    client = OpenAI(api_key = OPENAI_API_KEY)
+    embedding_resp = client.embeddings.create(
+        model = "text-embedding-3-small",
+        input = query
+    )
+    vector = embedding_resp["data"][0]["embedding"]
+
+    # Query Pinecone index
+    result = index.query(vector = vector, top_k = 1, include_metadata = True) # top k controls how many results to return
+    if result.matches:
+        return result.matches[0].metadata or {}
+    
+    return {}
 
 def retrieve_data_node(state: AgentState) -> str:
     """
-    Retrieves structured data for the user request using credentials from .env.
-
-    Steps:
-    1. Extract user_id and order_id from AgentState
-    2. Use Snowflake credentials to fetch order data
-    3. Retrieve policy context
-    4. Populate AgentState.retrieved
-    5. Update state.status to DATA_RETRIEVED
+    Retrieves structured order and policy data from Snowflake and Pinecone,
+    populates AgentState.retrieved, and updates status to DATA_RETRIEVED.
 
     Args:
         state: Current AgentState object
 
     Returns:
-        str: Next step identifier for the graph routing
+        str: Next step identifier for graph routing
     """
 
     # Pull identifiers from state or .env
@@ -78,11 +106,18 @@ def retrieve_data_node(state: AgentState) -> str:
     if not user_id:
         raise ValueError("USER_ID must be set in state or .env for data retrieval")
 
-    # Fetch order data from Snowflake (replace with real query)
+    # Snowflake fetch
     order_data = fetch_order_from_snowflake(user_id, order_id)
 
-    # Fetch policy context
+    # Policy context fetch
     policy_context = fetch_policy_context(order_data)
+
+    # Pinecone augmentation
+    pinecone_data = fetch_order_from_pinecone(state.user_input)
+
+    # Merge Pinecone data into order_data
+    if pinecone_data:
+        order_data.update(pinecone_data) # simple merge for demo
 
     # Populate AgentState.retrieved with typed outputs
     state.retrieved = RetrievalOutputs(
@@ -90,7 +125,7 @@ def retrieve_data_node(state: AgentState) -> str:
         policy_context = policy_context
     )
 
-    # Update lifecycle status using enum
+    # Update lifecycle status
     state.status = AgentStatus.DATA_RETRIEVED
 
     # Routing: continue to fraud/red-flag checker
