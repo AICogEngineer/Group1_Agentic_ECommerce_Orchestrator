@@ -41,7 +41,7 @@ class Intent(str, Enum):
     OTHER = "other"
 
 class RiskFlag(str, Enum):
-    """Fraud and risk indicators that may trigger HITL gating."""
+    """Defines fraud and abuse indicators that route requests to HITL."""
     REFUND_VELOCITY = "refund_velocity"
     RETURNLESS_VELOCITY = "returnless_velocity"
     GEO_MISMATCH = "geo_mismatch"
@@ -52,38 +52,24 @@ class RiskFlag(str, Enum):
     POLICY_OUT_OF_WINDOW = "policy_out_of_window"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
-class HumanDecisionType(str, Enum):
-    """Possible human reviewer actions."""
-    APPROVE = "approve"
-    REJECT = "reject"
-    EDIT = "edit"
-    NEEDS_MORE_INFO = "needs_more_info"
-
-# Pydantic Models
 class IntentExtraction(BaseModel):
-    """Captures the extracted intent from user input."""
+    """Structured output schema for intent extraction."""
     intent: Intent = Field(description = "Primary user intent")
-
-    user_id: Optional[str] = Field(None, description = "User identifier if present in the request")
-    order_id: Optional[str] = Field(None, description = "Order identifier if present in the request")
-
-    # Confidence in intent extraction (0 <= confidence <= 1)
-    confidence: float = Field(..., ge = 0, le = 1, description = "Model confidence in the extracted intent")
-
-    rationale: str = Field(description = "Brief explanation of how intent was derived")
+    user_id: Optional[str] = Field(None, description = "User identifier if present in request")
+    order_id: Optional[str] = Field(None, description = "Order identifier if present in request")
+    confidence: float = Field(..., ge = 0, le = 1, description = "Model confidence in extracted intent")
+    rationale: str = Field(description = "Brief explanation for the extraction")
 
 class FraudSignals(BaseModel):
     """Stores all fraud and risk-related signals."""
-    # Number of refunds in the recent window (cannot be negative)
     refund_count: int = Field(0, ge = 0, description = "Number of refunds in the recent window")
-    # Distance between shipping address and session location (cannot be negative)
     address_drift_miles: float = Field(0.0, ge = 0, description = "Distance between shipping address and session location")
 
-    red_flags: List[RiskFlag] = Field(description = "Triggered fraud or abuse indicators")
+    red_flags: List[RiskFlag] = Field(default_factory=list, description = "Triggered fraud or abuse indicators")
     trust_score: Optional[float] = Field(None, ge = 0, le = 1, description = "Composite trust score (0 = low, 1 = high)") # Composite trust score (0 = low, 1 = high)
-    requires_human_review: bool = Field(description = "Whether execution must be gated by a human")
+    requires_human_review: bool = Field(False, description = "Whether execution must be gated by a human")
 
-    summary: str = Field(description = "One-paragraph explanation for reviewers and audit logs")
+    summary: str = Field("", description = "One-paragraph explanation for reviewers and audit logs")
 
 class RetrievalOutputs(BaseModel):
     """Holds outputs from multi-source reasoning (Snowflake & Pinecone)."""
@@ -91,81 +77,65 @@ class RetrievalOutputs(BaseModel):
     policy_context: Dict[str, Any] = Field(description = "Policy clauses relevant to the request")
 
 class DraftResponse(BaseModel):
-    """Prepared response for human review or user communication."""
+    """Customer-facing draft response produced after approval."""
     channel: Literal["chat", "email"] = Field(description = "Delivery channel for the draft")
-    subject: Optional[str] = Field(None, description = "Email subject if applicable")
-    body: str = Field(description="Customer-visible response text")
+    subject: Optional[str] = Field(None, description = "Email subject if channel is email")
+    body: str = Field(description = "Customer-visible response text")
+    internal_notes: Optional[str] = Field(None, description = "Notes for human reviewers (not sent)")
 
-    internal_notes: Optional[str] = Field(None, description = "Internal reviewer notes (not sent)")
+class HumanDecisionType(str, Enum):
+    """Defines what the human reviewer can do."""
+    APPROVE = "approve"
+    REJECT = "reject"
+    EDIT = "edit"
+    NEEDS_MORE_INFO = "needs_more_info"
 
 class HumanDecision(BaseModel):
-    """Represents a human reviewer decision for HITL nodes."""
+    """One decision made by a human reviewer."""
     type: HumanDecisionType = Field(description = "Type of decision")
-    reason: Optional[str] = Field(None, description = "Reason for the decision")
+    reason: Optional[str] = Field(None, description = "Explanation for the decision")
     edits: Optional[Dict[str, Any]] = Field(None, description = "Edits applied when type == EDIT")
 
 class HITLResumePayload(BaseModel):
-    """Collection of human decisions to resume execution."""
-    decisions: List[HumanDecision] = Field(description = "Decisions applied by the human reviewer")
+    """Payload passed into Command(resume=...) after human review."""
+    decisions: List[HumanDecision] = Field(default_factory=list, description = "Decisions applied by the human reviewer")
 
-# Agent State
 class AgentState(BaseModel):
-    """
-    The central agent state object.
-    Contains user input, session info, verification, fraud signals,
-    HITL data, reasoning outputs, and draft response.
-    """
+    """Persistent state carried through the LangGraph workflow."""
+    model_config = ConfigDict(extra="allow")
 
-    # Allow extra fields for flexibility
-    model_config = ConfigDict(extra = "allow")
-
-    # User / Session
     user_input: str = Field(description = "Raw user message")
-    session_metadata: Dict[str, Any] = Field(
-        default_factory = dict, description = "Session context: IP, geo, device, or session context"
-    )
+    session_metadata: Dict[str, Any] = Field(default_factory=dict, description = "IP, geo, device, or session context")
 
     intent: Intent = Field(Intent.OTHER, description = "Parsed user intent")
     user_id: Optional[str] = None
     order_id: Optional[str] = None
 
     is_verified: bool = Field(False, description = "Identity verification result")
-    contains_pii: bool = Field(False, description = "Whether input contained PII")
+    contains_pii: bool = Field(False, description = "Whether user input contained PII")
 
-    status: Optional[AgentStatus] = Field(None, description = "Current lifecycle stage")
+    status: Optional[str] = Field(None, description = "Current lifecycle stage")
 
-    # Fraud / Risk
-    refund_count: int = Field(0, ge = 0, description = "Number of refunds in the recent window")
-    address_drift_miles: float = Field(0.0, ge = 0, description = "Distance between shipping address and session location")
-
-    red_flags: List[RiskFlag] = Field(default_factory = list)
+    refund_count: int = Field(0, ge = 0)
+    address_drift_miles: float = Field(0.0, ge = 0)
+    red_flags: List[str] = Field(default_factory=list)
     requires_human_review: bool = False
 
-    fraud: Optional[FraudSignals] = Field(default_factory = FraudSignals)
+    fraud: Optional[FraudSignals] = None
     retrieved: Optional[RetrievalOutputs] = None
 
-    # HITL / Human Review
     hitl_resume: Optional[HITLResumePayload] = None
     human_notes: Optional[str] = None
 
-    # Draft / Response
     draft: Optional[DraftResponse] = None
 
-    # Logging / Tracing
     trace_id: Optional[str] = Field(None, description = "Trace identifier for LangSmith / logging")
 
-    # Override dict to allow flexible dumping
     def dict(self, *args, **kwargs) -> Dict[str, Any]:
         return self.model_dump(*args, **kwargs)
 
-# Helper Function
 def safe_validate_state(data: Dict[str, Any]) -> AgentState:
-    """
-    Validates a dictionary as a proper AgentState.
-    Raises RuntimeError if validation fails.
-    """
     try:
         return AgentState.model_validate(data)
     except ValidationError as e:
         raise RuntimeError(f"Invalid AgentState: {e}") from e
-    
