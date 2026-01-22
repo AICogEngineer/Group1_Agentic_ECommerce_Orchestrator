@@ -147,9 +147,13 @@ def run_agent(user_input: str, session_metadata: Dict[str, Any]) -> AgentState:
         ),
     )
 
-    # Compile and invoke the agent graph
+    # Build and run graph
     graph = build_agent_graph().compile()
     final_state = graph.invoke(initial_state)
+
+    # Ensure AgentState type for consistent downstream usage
+    if isinstance(final_state, dict):
+        final_state = AgentState.model_validate(final_state)
 
     return final_state
 
@@ -166,20 +170,27 @@ if __name__ == "__main__":
         "address_drift_miles": 0.0
     }
 
-    # Initialize LangSmith client and start a trace
+    # Initialize LangSmith client 
     client = Client()
-    trace_id = client.start_trace(name = "Demo Agent Run")
 
-    # Run the agent
+    # Run agent
     final_state = run_agent(demo_input, demo_session)
-    final_state.trace_id = trace_id
 
-    # Log full agent state to LangSmith
-    client.log_state(trace_id, final_state.dict())
-
-    # End the LangSmith trace
-    client.end_trace(trace_id)
-
-    # Print final state
+    # Print final state safely
     print("Final AgentState:")
     print(final_state.dict())
+
+    # Safety assertion
+    assert final_state.status in {
+        AgentStatus.IDENTITY_REQUIRED,
+        AgentStatus.IDENTITY_FAILED,
+        AgentStatus.IDENTITY_VERIFIED,
+        AgentStatus.DATA_RETRIEVED,
+        AgentStatus.FLAGS_CHECKED,
+        AgentStatus.RISK_SCORED,
+        AgentStatus.HUMAN_REVIEW_REQUIRED,
+        AgentStatus.HUMAN_APPROVED,
+        AgentStatus.HUMAN_REJECTED,
+        AgentStatus.DRAFT_READY,
+        AgentStatus.DONE
+    }
