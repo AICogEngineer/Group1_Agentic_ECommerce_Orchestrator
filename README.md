@@ -1,5 +1,5 @@
 # Agentic E-Commerce Orchestrator
-**Team:** By Harsh Chavva, Matthew Doer, Iyanda Oritola & Koshik Mahapatra
+**Team:** By Harsh Chavva, Matthew Doerr, Iyanda Oritola & Koshik Mahapatra
 
 ---
 

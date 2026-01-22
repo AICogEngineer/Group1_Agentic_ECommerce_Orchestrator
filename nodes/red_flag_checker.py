@@ -18,28 +18,31 @@ def red_flag_checker_node(state: AgentState) -> AgentState:
     Updates AgentState with red flags and HITL requirement.
     """
 
-    # Load policy thresholds from .env
-    max_refunds = int(os.environ["MAX_REFUNDS_PER_MONTH"])
-    max_drift_miles = float(os.environ["ADDRESS_DRIFT_THRESHOLD_MILES"])
+    # Load thresholds from environment
+    max_refunds = int(os.getenv("MAX_REFUNDS_PER_MONTH", "0"))
+    max_drift_miles = float(os.getenv("ADDRESS_DRIFT_THRESHOLD_MILES", "0"))
 
-    # Extract signals from state
     refund_count = state.refund_count
-    address_drift_miles = state.address_drift_miles
+    address_drift = state.address_drift_miles
+
+    red_flags: list[RiskFlag] = []
 
     # Refund velocity check
     if refund_count > max_refunds:
-        state.red_flags.append(RiskFlag.REFUND_VELOCITY)
-        state.requires_human_review = True
+        red_flags.append(RiskFlag.REFUND_VELOCITY)
 
-    # Address drift check
-    if address_drift_miles > max_drift_miles:
-        state.red_flags.append(RiskFlag.GEO_MISMATCH)
-        state.requires_human_review = True
+    # Geo mismatch check
+    if address_drift > max_drift_miles:
+        red_flags.append(RiskFlag.GEO_MISMATCH)
 
-    # Update status
-    if state.red_flags:
-        state.status = AgentStatus.FLAGS_CHECKED
-    else:
-        state.status = AgentStatus.FLAGS_CHECKED
+    # Update state-level flags
+    state.red_flags = red_flags
+    state.requires_human_review = bool(red_flags)
 
+    # Keep FraudSignals authoritative and in sync
+    if state.fraud:
+        state.fraud.red_flags = red_flags
+        state.fraud.requires_human_review = state.requires_human_review
+
+    state.status = AgentStatus.FLAGS_CHECKED
     return state

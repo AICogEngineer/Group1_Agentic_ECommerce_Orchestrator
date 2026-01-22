@@ -114,11 +114,11 @@ class AgentState(BaseModel):
     is_verified: bool = Field(False, description = "Identity verification result")
     contains_pii: bool = Field(False, description = "Whether user input contained PII")
 
-    status: Optional[str] = Field(None, description = "Current lifecycle stage")
+    status: Optional[AgentStatus] = Field(None, description = "Current lifecycle stage")
 
     refund_count: int = Field(0, ge = 0)
     address_drift_miles: float = Field(0.0, ge = 0)
-    red_flags: List[str] = Field(default_factory=list)
+    red_flags: List[RiskFlag] = Field(default_factory = list)
     requires_human_review: bool = False
 
     fraud: Optional[FraudSignals] = None

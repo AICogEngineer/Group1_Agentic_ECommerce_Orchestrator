@@ -12,7 +12,7 @@ Purpose:
 import os
 from agent.state import AgentState, AgentStatus, Intent
 
-# Define keywords mapping to intents
+# Keyword-based intent hints (lightweight, deterministic)
 INTENT_KEYWORDS = {
     "refund": Intent.REFUND,
     "return": Intent.RETURN,
@@ -27,39 +27,41 @@ def verify_identity_node(state: AgentState) -> AgentState:
         - Identity is validated against trusted values in .env
         - .env is the single source of truth
     Determines intent based on keywords in user input.
-    Relies exclusively on .env for trusted credentials.
-    
-    In production, this would check PII, auth tokens, or external identity providers.    
+    Relies exclusively on .env for trusted credentials. 
     """
 
     # Load trusted credentials from environment
-    trusted_user_id = os.environ["TRUSTED_USER_ID"]
-    trusted_user_email = os.environ["TRUSTED_USER_EMAIL"]
+    trusted_user_id = os.getenv("USER_ID")
+    trusted_user_email = os.getenv("USER_EMAIL")
 
-    # Extract session metadata
+    # Fail closed if credentials are missing
+    if not trusted_user_id or not trusted_user_email:
+        state.is_verified = False
+        state.status = AgentStatus.IDENTITY_FAILED
+        return state
+    
+    # Extract session-provided identity
     session_user_id = state.session_metadata.get("user_id")
     session_email = state.session_metadata.get("email")
 
-    # Identity verification
+    # Verify identity
     if session_user_id == trusted_user_id and session_email == trusted_user_email:
         state.is_verified = True
         state.status = AgentStatus.IDENTITY_VERIFIED
     else:
         state.is_verified = False
-        state.status = AgentStatus.IDENTITY_REQUIRED
+        state.status = AgentStatus.IDENTITY_FAILED
+        return state
 
-    # Set intent based on user input keywords
+    # Lightweight intent detection (routing hint only)
     user_input_lower = state.user_input.lower()
-    detected_intent = Intent.OTHER # Default
-    for keyword, intent_enum in INTENT_KEYWORDS.items():
+    state.intent = Intent.OTHER
+    for keyword, intent in INTENT_KEYWORDS.items():
         if keyword in user_input_lower:
-            detected_intent = intent_enum
+            state.intent = intent
             break
 
-    state.intent = detected_intent
-
-    # Marks PII if user_id/email present
-    if "@" in state.user_input or any(c.isdigit() for c in state.user_input):
-        state.contains_pii = True
+    # Mark potential PII exposure (conservative heuristic)
+    state.contains_pii = bool(session_user_id or session_email)
 
     return state

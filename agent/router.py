@@ -14,7 +14,7 @@ Design principles:
 - Easy to reason about during safety reviews
 """
 
-from agent.state import AgentState
+from agent.state import AgentState, AgentStatus
 
 def route_next_step(state: AgentState) -> str:
     """
@@ -37,10 +37,10 @@ def route_next_step(state: AgentState) -> str:
         return "human_review"
 
     # 3. Post–human review decisions
-    if state.status == "HUMAN_APPROVED":
+    if state.status == AgentStatus.HUMAN_APPROVED:
         return "approved"
 
-    if state.status == "HUMAN_REJECTED":
+    if state.status == AgentStatus.HUMAN_REJECTED:
         return "rejected"
 
     # 4. Normal autonomous continuation

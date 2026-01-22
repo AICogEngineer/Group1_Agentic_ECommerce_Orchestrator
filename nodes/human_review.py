@@ -30,7 +30,11 @@ def human_review_node(state: AgentState) -> AgentState:
     # Get the human decision from the state
         # In production, this would come from a UI or API input
         # Expected values: "approve", "reject", "edit", "needs_more_info"
-    decision = getattr(state, "human_decision", None)
+    decision = (
+        state.hitl_resume.decisions[-1].type
+        if state.hitl_resume and state.hitl_resume.decisions
+        else None
+    )
 
     # Process the decision
     if decision == HumanDecisionType.APPROVE:
