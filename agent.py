@@ -147,11 +147,11 @@ def run_agent(user_input: str, session_metadata: Dict[str, Any]) -> AgentState:
         ),
     )
 
-    # Build and run graph
+    # Compile and run the graph
     graph = build_agent_graph().compile()
     final_state = graph.invoke(initial_state)
 
-    # Ensure AgentState type for consistent downstream usage
+    # Ensure Pydantic v2 AgentState
     if isinstance(final_state, dict):
         final_state = AgentState.model_validate(final_state)
 
@@ -170,15 +170,12 @@ if __name__ == "__main__":
         "address_drift_miles": 0.0
     }
 
-    # Initialize LangSmith client 
-    client = Client()
-
-    # Run agent
+    # Works with LangSmith
     final_state = run_agent(demo_input, demo_session)
 
-    # Print final state safely
+    # Print final AgentState
     print("Final AgentState:")
-    print(final_state.dict())
+    print(final_state.model_dump())
 
     # Safety assertion
     assert final_state.status in {
