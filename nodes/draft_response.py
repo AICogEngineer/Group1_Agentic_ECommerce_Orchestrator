@@ -11,7 +11,6 @@ Purpose:
 # nodes/draft_response.py
 from agent.state import AgentState, DraftResponse, AgentStatus
 
-
 def draft_response_node(state: AgentState) -> AgentState:
     order_data = {}
     if getattr(state, "retrieved", None) is not None and getattr(state.retrieved, "order_data", None) is not None:

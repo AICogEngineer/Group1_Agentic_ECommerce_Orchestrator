@@ -102,7 +102,11 @@ class HITLResumePayload(BaseModel):
 
 class AgentState(BaseModel):
     """Persistent state carried through the LangGraph workflow."""
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(
+        extra = "allow",
+        arbitrary_types_allowed = True,  # prevents LangGraph crashes on injected runtime fields
+        validate_assignment = False      # avoids re-validation during node mutation
+    )
 
     user_input: str = Field(description = "Raw user message")
     session_metadata: Dict[str, Any] = Field(default_factory=dict, description = "IP, geo, device, or session context")
@@ -114,7 +118,7 @@ class AgentState(BaseModel):
     is_verified: bool = Field(False, description = "Identity verification result")
     contains_pii: bool = Field(False, description = "Whether user input contained PII")
 
-    status: Optional[AgentStatus] = Field(None, description = "Current lifecycle stage")
+    status: AgentStatus = AgentStatus.IDENTITY_REQUIRED # default prevents NoneType router crashes
 
     refund_count: int = Field(0, ge = 0)
     address_drift_miles: float = Field(0.0, ge = 0)
@@ -129,12 +133,20 @@ class AgentState(BaseModel):
 
     draft: Optional[DraftResponse] = None
 
-    trace_id: Optional[str] = Field(None, description = "Trace identifier for LangSmith / logging")
+    trace_id: Optional[str] = None
 
     def dict(self, *args, **kwargs) -> Dict[str, Any]:
-        return self.model_dump(*args, **kwargs)
+        """
+        LangGraph expects `.dict()` in some internal paths.
+        """
+        return self.model_dump(*args, **kwargs) # explicit compatibility with Pydantic v2
 
+# Safe Validator
 def safe_validate_state(data: Dict[str, Any]) -> AgentState:
+    """
+    Used ONLY at graph entry boundaries.
+    Do NOT use inside nodes.
+    """
     try:
         return AgentState.model_validate(data)
     except ValidationError as e:

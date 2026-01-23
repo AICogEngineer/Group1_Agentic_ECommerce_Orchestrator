@@ -87,7 +87,7 @@ def fetch_order_from_pinecone(query: str) -> dict:
     
     return {}
 
-def retrieve_data_node(state: AgentState) -> str:
+def retrieve_data_node(state: AgentState) -> AgentState:
     """
     Retrieves structured order and policy data from Snowflake and Pinecone,
     populates AgentState.retrieved, and updates status to DATA_RETRIEVED.

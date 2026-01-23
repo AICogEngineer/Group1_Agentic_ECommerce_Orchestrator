@@ -1,5 +1,5 @@
 """
-agent.py
+agent.py renamed to app.py
 
 Primary orchestration file for the Agentic E-Commerce Orchestrator.
 
@@ -170,7 +170,8 @@ if __name__ == "__main__":
         "address_drift_miles": 0.0
     }
 
-    # Works with LangSmith
+    # LangSmith tracing is automatic via LANGSMITH_TRACING=true
+    # run agent
     final_state = run_agent(demo_input, demo_session)
 
     # Print final AgentState
@@ -191,3 +192,6 @@ if __name__ == "__main__":
         AgentStatus.DRAFT_READY,
         AgentStatus.DONE
     }
+
+# REQUIRED for LangGraph CLI
+graph = build_agent_graph().compile()

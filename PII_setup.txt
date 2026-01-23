@@ -8,6 +8,18 @@ TRUSTED_USER_EMAIL=user@example.com
 # Open Ai
 OPENAI_API_KEY=#
 
+# LangSmith
+LANGSMITH_API_KEY=ls-xxx
+LANGSMITH_TRACING=true
+LANGCHAIN_TRACING_V2=true
+
+# You need to configure your environment
+export LANGSMITH_TRACING=true
+export LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+export LANGSMITH_API_KEY=ls
+export LANGSMITH_PROJECT="e_commerce_project"
+export OPENAI_API_KEY=<your-openai-api-key>
+
 # Snowflake (used in retrieve_data node)
 SNOWFLAKE_ACCOUNT=MUZXOCR-AIREADER
 SNOWFLAKE_USER=#

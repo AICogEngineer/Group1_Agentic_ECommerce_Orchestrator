@@ -29,7 +29,7 @@ def route_next_step(state: AgentState) -> str:
     """
 
     # 1. Identity verification gate
-    if not state.is_verified:
+    if state.status == AgentStatus.IDENTITY_FAILED:
         return "blocked" # Blocks all sensitive requests until PII verified
 
     # 2. Human-in-the-loop required (risk or fraud)

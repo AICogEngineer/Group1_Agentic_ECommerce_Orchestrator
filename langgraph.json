@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "agentic_ecommerce_graph": "app:graph"
+  }
+}
